@@ -1,4 +1,4 @@
-// collision, 3 hak bitince oyunu durdur
+// collision'un reflectiondaki etkisi nasýl çözülecek ?
 #include<glew.h>
 #include<freeglut.h>
 #include<iostream>
@@ -6,6 +6,7 @@
 #include <random>
 #include <functional>
 #include "Structers.h"
+#include<malloc.h>
 using namespace std;
 
 const int TOTAL_WIDTH = 480;
@@ -34,8 +35,13 @@ void updateLevelSpeed();													// after every level update the choppers sp
 void randomizeColors(int i);												// generate new colors for textures
 int randomizeScale();														// choose random flying direction
 int randomizeStartSpeed();													// choose random start speed
+void randomizePlaneLocation();												// helper 
 bool intersectCheck();														// it checks collisions between plane and helicopters
+bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth);	// after reducing scan area this function scans pixel-perfect level
+void idlefunc();															// without any interference check intersections
 void renderBitmapString(float x, float y,void* font, const char* string);	// helper for rendering characters
+void updateGameStatus();													// this func resets level after crush
+void gameOver();															// it shows that game over		
 
 Vehicle helicopters[] = {
 	Vehicle({ 0, 525, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
@@ -52,17 +58,43 @@ Vehicle planeV = Vehicle({ 215, 0, 0 }, { 1,1,1 }, 1 , 1);
 */
 int main(int argc, char* argv[]) {
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_DEPTH | GLUT_STENCIL); // LAST 3 ADDED LATER 
 	glutInitWindowSize(TOTAL_WIDTH, TOTAL_HEIGHT);
 	glutCreateWindow("REACH TO THE TARGET");
 	init2D();
 	glutReshapeFunc(reshape);
 	glutSpecialFunc(keyboard_activity);
 	glutKeyboardFunc(keyboard_activity2);
+	glutIdleFunc(idlefunc);
 	glutTimerFunc(0,regular_flow,0);
 	glutDisplayFunc(display);
 	glutMainLoop();
 }
+
+/*
+	check intersections
+*/
+void idlefunc() {
+		updateGameStatus();
+}
+
+/*
+	reset level and take 1 heart from user
+*/
+void updateGameStatus() {
+
+	if (remainingLife == 0) {
+		// ON THE SCREEN GAME OVER and WAIT FOR ENTER
+	}
+	else {
+		if (intersectCheck()) {
+			remainingLife -= 1;
+			plane_move_y = 0;
+			randomizePlaneLocation();
+		}
+	}
+}
+
 
 /*
 	this function loads images and does some configuration for program
@@ -78,8 +110,8 @@ void init2D() {
 
 	loadTexture("Images/heli1.png", heli_id[0]);
 	loadTexture("Images/heli2.png", heli_id[1]);
-	loadTexture("Images/heli3.png", heli_id[2]);
-	loadTexture("Images/heli4.png", heli_id[3]);
+	loadTexture("Images/heli3.png", heli_id[3]);
+	loadTexture("Images/heli4.png", heli_id[2]);
 	loadTexture("Images/plane.png", plane);
 
 }
@@ -90,16 +122,15 @@ void init2D() {
 void display() {
 	glClear(GL_COLOR_BUFFER_BIT); // ekraný temizliyoruz
 
-	glLoadIdentity();
-	glDisable(GL_BLEND);
+
 	showScoreboard();
-	glEnable(GL_BLEND);
 
 	// draw helicopters
 	drawHelis(helicopters);
 
 	// draw plane
-	drawPlane();
+	if (remainingLife > 0)	drawPlane();
+	else gameOver();
 
 	glFlush(); // refresh screen
 	glutSwapBuffers(); // change frame buffers
@@ -132,7 +163,7 @@ void drawHelis(Vehicle helicopters[] ) {
 	{
 		glColor3f(helicopters[current_heli].color.x, helicopters[current_heli].color.y, helicopters[current_heli].color.z);
 		glLoadIdentity();
-		glScalef(helicopters[current_heli].scale_factor, 1 , 1);
+		// glScalef(helicopters[current_heli].scale_factor, 1 , 1);
 		glBindTexture(GL_TEXTURE_2D, heli_id[current_heli]);
 		glBegin(GL_QUADS);
 			glTexCoord2f(0, 0); 
@@ -186,11 +217,7 @@ void regular_flow(int what) {
 		}
 		glutPostRedisplay();
 	}
-	if (intersectCheck())
-	{
-		cout << "collision detected!!" << endl;
-	}
-	glutTimerFunc(15, regular_flow, 0);
+	glutTimerFunc(20, regular_flow, 0);
 }
 
 /*
@@ -264,12 +291,17 @@ void renderBitmapString(float x, float y,void* font, const char* string) {
 	draws scorboard to right top
 */
 void showScoreboard() {
+	glLoadIdentity();
+	glDisable(GL_BLEND);
+
 	char buffer[20] = { '\0' };
 	char buffer2[20] = { '\0' };
 	sprintf_s(buffer, "SCORE:%d", score);
 	sprintf_s(buffer2, "HEARTS:%d", remainingLife); 
 	renderBitmapString(300,620,GLUT_BITMAP_9_BY_15, buffer);
 	renderBitmapString(400,620,GLUT_BITMAP_9_BY_15, buffer2);
+
+	glEnable(GL_BLEND);
 
 }
 
@@ -283,8 +315,9 @@ void loadTexture(const string& path, GLuint& object) {
 		path.c_str(),
 		SOIL_LOAD_AUTO,
 		SOIL_CREATE_NEW_ID,
-		SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y  | SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_MULTIPLY_ALPHA | SOIL_FLAG_COMPRESS_TO_DXT
+		SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y  | SOIL_FLAG_COMPRESS_TO_DXT
 	);
+	//  SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_MULTIPLY_ALPHA |
 	glBindTexture(GL_TEXTURE_2D, object);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -304,17 +337,15 @@ void keyboard_activity(int key, int x, int y) {
 		plane_move_y += 10;
 		checkLevelUpdate();
 	}
-	if (key == GLUT_KEY_DOWN) {
-		//plane_move_y -= 0.03f;
+	if (key == GLUT_KEY_DOWN && plane_move_y > 0) {
 		plane_move_y -= 10;
 	}
-	if (key == GLUT_KEY_RIGHT) {
+	if (key == GLUT_KEY_RIGHT && (planeV.position.x + planeV.width + plane_move_x) < TOTAL_WIDTH) {
 		plane_move_x += 10;
 	}
-	if (key == GLUT_KEY_LEFT) {
-		plane_move_x -= 10;
+	if (key == GLUT_KEY_LEFT && (planeV.position.x + plane_move_x) > 0) {
+		 plane_move_x -= 10;
 	}
-	
 	glutPostRedisplay();
 
 }
@@ -325,10 +356,11 @@ void keyboard_activity(int key, int x, int y) {
 void keyboard_activity2(unsigned char key, int x, int y) {
 	if (key == 13 && remainingLife == 0) {
 		cout << "enter" << endl;
-		randomizePlaneLocation();
+		remainingLife = 3;
 		plane_move_x = 0;
 		plane_move_y = 0;
 		score = 0;
+		randomizePlaneLocation();
 		glutPostRedisplay();
 	}
 }
@@ -359,15 +391,74 @@ void updateLevelSpeed() {
 	this function detects collision between QUADS via their coordinates for optimizing issues 
 */
 bool intersectCheck() {
-	bool is_x_have_collision;
-	bool is_y_have_collision;
-	// in x-axis
-	for (int current_heli = 0; current_heli < 4; current_heli++) {
-		is_x_have_collision = planeV.position.x + planeV.width + plane_move_x >= helicopters[current_heli].position.x + helicopters[current_heli].speed && helicopters[current_heli].position.x +  helicopters[current_heli].width + helicopters[current_heli].speed >= planeV.position.x+ plane_move_x;
-		is_y_have_collision = planeV.position.y + planeV.height + plane_move_y >= helicopters[current_heli].position.y && helicopters[current_heli].position.y + helicopters[current_heli].width >= planeV.position.y + plane_move_y;
-		if (is_x_have_collision && is_y_have_collision) return true;
+	bool is_x_have_collision, is_y_have_collision;
+	int px0, px1, py0, py1, hx0, hx1, hy0, hy1;
+
+	for (int i = 0; i < 4; i++) {
+		px0 = planeV.position.x + plane_move_x;
+		px1 = planeV.position.x + plane_move_x + planeV.width;
+		py0 = planeV.position.y + plane_move_y;
+		py1 = planeV.position.y + plane_move_y + planeV.height;
+		hx0 = helicopters[i].position.x + helicopters[i].speed;
+		hx1 = helicopters[i].position.x + helicopters[i].speed + helicopters[i].width;
+		hy0 = helicopters[i].position.y;
+		hy1 = helicopters[i].position.y + helicopters[i].height;
+
+		is_x_have_collision = px1 >= hx0 && hx1 >= px0;
+		is_y_have_collision = py1 >= hy0 && hy1 >= py0;
+		
+		//if both axis are true means there is a collision 
+		// intersected area info in case of intersection
+		if (is_x_have_collision && is_y_have_collision) {
+			// uçaðýn burnunun kordinatý y + 50 helinin tepesinin kordinati yani y + 50 den büyükse intersection üst kýsýmdan olmuþtur
+			int left, bottom, right, top;
+			left = max(px0, hx0);
+			right = min(px1, hx1);
+			top = min(py1, hy1);
+			bottom = max(py0, hy0);
+
+			return checkIntersectedAreas(left, bottom, fabs(right - left) == 0 ? 1 : fabs(right - left), fabs(top-bottom) == 0 ? 1 : fabs(top-bottom));
+		}
 	}
 
-	//if both axis are true means there is a collision 
-	return is_x_have_collision && is_y_have_collision;
+	return false;
+}
+ 
+/*
+	if there intersections this functions uses more spesific scan on pixel colors with alpha blending
+*/
+bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
+	int areasize = partw * parth;
+	int neededspace = areasize * 4;
+	float* pixel;
+	pixel = (float*)malloc(neededspace * sizeof(float));
+	if (!pixel)
+	{
+		cout << "memory allocation failed" << endl;
+		exit(0);
+	}
+	glReadPixels(xstart, ystart, partw, parth, GL_RGBA, GL_FLOAT, pixel);
+	
+	for (int i = 0; i < neededspace ; i++)
+	{
+		if (pixel[i] == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+/*
+	RENDERS SCORE AND RE-PLAY INFO TO THE SCREEN
+*/
+void gameOver() {
+	glLoadIdentity();
+	glDisable(GL_BLEND);
+
+	char buffer[100] = { '\0' };
+	sprintf_s(buffer, "GAME OVER SCORE:%d ENTER FOR PLAY AGAIN", score);
+	renderBitmapString(60, 100, GLUT_BITMAP_9_BY_15, buffer);
+
+	glEnable(GL_BLEND);
 }
