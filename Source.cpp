@@ -7,6 +7,8 @@
 #include <functional>
 #include "Structers.h"
 #include<malloc.h>
+#include <Mmsystem.h> // for play sound
+
 using namespace std;
 
 const int TOTAL_WIDTH = 480;
@@ -19,6 +21,7 @@ int plane_move_x = 0, plane_move_y = 0;
 int level_speed = 1;
 GLuint first_heli_id, second_heli_id, third_heli_id,fourth_heli_id, plane;
 GLuint heli_id[] = { first_heli_id , second_heli_id, third_heli_id, fourth_heli_id };
+bool isPlayed = false; // for preventing sound loop
 
 void init2D();																// load images and start configurations
 void loadTexture(const string& path, GLuint& object);						// create textures by using SOIL2 library
@@ -27,6 +30,7 @@ void drawHelis(Vehicle helicopters[]);										// draws helicopters
 void drawPlane();															// draws plane 
 void showScoreboard();														// draws scorboard to the screen
 void regular_flow(int what);												// regular program flow 
+void idlefunc();															// without any interference check intersections
 void keyboard_activity(int key, int x, int y);								// keyboard listener
 void keyboard_activity2(unsigned char key, int x, int y);					// keyboard listener
 void reshape(int w, int h);													// reshape function for windows resizing.
@@ -38,7 +42,6 @@ int randomizeStartSpeed();													// choose random start speed
 void randomizePlaneLocation();												// helper 
 bool intersectCheck();														// it checks collisions between plane and helicopters
 bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth);	// after reducing scan area this function scans pixel-perfect level
-void idlefunc();															// without any interference check intersections
 void renderBitmapString(float x, float y,void* font, const char* string);	// helper for rendering characters
 void updateGameStatus();													// this func resets level after crush
 void gameOver();															// it shows that game over		
@@ -82,12 +85,13 @@ void idlefunc() {
 	reset level and take 1 heart from user
 */
 void updateGameStatus() {
-
+	
 	if (remainingLife == 0) {
-		// ON THE SCREEN GAME OVER and WAIT FOR ENTER
+		// WAIT FOR ENTER
 	}
 	else {
 		if (intersectCheck()) {
+			PlaySound("Sounds/plane_crash.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME );
 			remainingLife -= 1;
 			plane_move_y = 0;
 			randomizePlaneLocation();
@@ -346,7 +350,7 @@ void keyboard_activity(int key, int x, int y) {
 		plane_move_y += 10;
 		checkLevelUpdate();
 	}
-	if (key == GLUT_KEY_DOWN && plane_move_y > 0) {
+	if (key == GLUT_KEY_DOWN && (plane_move_y + planeV.position.y) > 0) {
 		plane_move_y -= 10;
 	}
 	if (key == GLUT_KEY_RIGHT && (planeV.position.x + planeV.width + plane_move_x) < TOTAL_WIDTH) {
@@ -369,6 +373,7 @@ void keyboard_activity2(unsigned char key, int x, int y) {
 		plane_move_x = 0;
 		plane_move_y = 0;
 		score = 0;
+		isPlayed = false;
 		randomizePlaneLocation();
 		glutPostRedisplay();
 	}
@@ -381,6 +386,7 @@ void checkLevelUpdate() {
 	if (plane_move_y + planeV.position.y > TOTAL_HEIGHT)
 	{
 		updateLevelSpeed();
+		PlaySound("Sounds/level_up.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME);
 		cout << "LEVEL UP" << endl;
 		score += 10;
 		plane_move_y = 0;
@@ -464,9 +470,11 @@ void gameOver() {
 
 	char buffer[100] = { '\0' };
 	sprintf_s(buffer, "GAME OVER SCORE:%d ENTER FOR PLAY AGAIN", score);
-	renderBitmapString(60, 100, GLUT_BITMAP_9_BY_15, buffer);
+	renderBitmapString(60, 320, GLUT_BITMAP_9_BY_15, buffer);
 
 	glEnable(GL_BLEND);
+
+	if (!isPlayed) PlaySound("Sounds/game_over.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME); isPlayed = true;
 }
 
 /*
