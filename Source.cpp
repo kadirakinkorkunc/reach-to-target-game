@@ -1,4 +1,4 @@
-// collision'un reflectiondaki etkisi nasýl çözülecek ?
+// reshape de collision patlýyor , maybe score geçmiþi ?
 #include<glew.h>
 #include<freeglut.h>
 #include<iostream>
@@ -42,7 +42,7 @@ void idlefunc();															// without any interference check intersections
 void renderBitmapString(float x, float y,void* font, const char* string);	// helper for rendering characters
 void updateGameStatus();													// this func resets level after crush
 void gameOver();															// it shows that game over		
-
+void reverseTheAxis(int i);
 Vehicle helicopters[] = {
 	Vehicle({ 0, 525, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
 	Vehicle({ 0, 430, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
@@ -110,8 +110,8 @@ void init2D() {
 
 	loadTexture("Images/heli1.png", heli_id[0]);
 	loadTexture("Images/heli2.png", heli_id[1]);
-	loadTexture("Images/heli3.png", heli_id[3]);
-	loadTexture("Images/heli4.png", heli_id[2]);
+	loadTexture("Images/heli3.png", heli_id[2]);
+	loadTexture("Images/heli4.png", heli_id[3]);
 	loadTexture("Images/plane.png", plane);
 
 }
@@ -122,15 +122,16 @@ void init2D() {
 void display() {
 	glClear(GL_COLOR_BUFFER_BIT); // ekraný temizliyoruz
 
+	if (remainingLife > 0) {
+		showScoreboard();
 
-	showScoreboard();
+		// draw helicopters
+		drawHelis(helicopters);
 
-	// draw helicopters
-	drawHelis(helicopters);
-
-	// draw plane
-	if (remainingLife > 0)	drawPlane();
-	else gameOver();
+		// draw plane
+		drawPlane();
+	}
+	else { gameOver(); }
 
 	glFlush(); // refresh screen
 	glutSwapBuffers(); // change frame buffers
@@ -150,7 +151,7 @@ void reshape(int w, int h)
 	int left = (w - width) / 2;
 	glViewport(left, 0, width, h);
 	gluOrtho2D(0, TOTAL_WIDTH, 0,TOTAL_HEIGHT);
-	glMatrixMode(GL_PROJECTION);
+	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 }
 
@@ -159,23 +160,21 @@ void reshape(int w, int h)
 */
 void drawHelis(Vehicle helicopters[] ) {
 	
-	for (int current_heli = 0; current_heli < 4 ; current_heli++)
+	for (int i = 0; i < 4 ; i++)
 	{
-		glColor3f(helicopters[current_heli].color.x, helicopters[current_heli].color.y, helicopters[current_heli].color.z);
+		glColor3f(helicopters[i].color.x, helicopters[i].color.y, helicopters[i].color.z);
 		glLoadIdentity();
-		// glScalef(helicopters[current_heli].scale_factor, 1 , 1);
-		glBindTexture(GL_TEXTURE_2D, heli_id[current_heli]);
+		glBindTexture(GL_TEXTURE_2D, heli_id[i]);
 		glBegin(GL_QUADS);
 			glTexCoord2f(0, 0); 
-				glVertex2i(helicopters[current_heli].position.x + helicopters[current_heli].speed, helicopters[current_heli].position.y);
+				glVertex2i(helicopters[i].position.x + helicopters[i].speed, helicopters[i].position.y);
 			glTexCoord2f(1, 0); 
-				glVertex2i(helicopters[current_heli].position.x + helicopters[current_heli].speed + helicopters[current_heli].width , helicopters[current_heli].position.y);
+				glVertex2i(helicopters[i].position.x + helicopters[i].speed + helicopters[i].width , helicopters[i].position.y);
 			glTexCoord2f(1, 1); 
-				glVertex2i(helicopters[current_heli].position.x + helicopters[current_heli].speed + helicopters[current_heli].width, helicopters[current_heli].position.y + helicopters[current_heli].height);
+				glVertex2i(helicopters[i].position.x + helicopters[i].speed + helicopters[i].width, helicopters[i].position.y + helicopters[i].height);
 			glTexCoord2f(0, 1); 
-				glVertex2i(helicopters[current_heli].position.x + helicopters[current_heli].speed, helicopters[current_heli].position.y + helicopters[current_heli].height);
+				glVertex2i(helicopters[i].position.x + helicopters[i].speed, helicopters[i].position.y + helicopters[i].height);
 		glEnd();
-
 	}
 }
 
@@ -206,14 +205,24 @@ void drawPlane() {
 void regular_flow(int what) {
 	for (int i = 0; i < 4; i++)
 	{
-		if (helicopters[i].speed < TOTAL_WIDTH)
+		if (helicopters[i].scale_factor == 1 && helicopters[i].speed <= TOTAL_WIDTH)
 		{
-			helicopters[i].speed += (helicopters[i].start_speed + level_speed);
+			helicopters[i].speed += helicopters[i].start_speed + level_speed;
+		}
+		else if (helicopters[i].scale_factor == -1 && helicopters[i].speed >= -TOTAL_WIDTH ) {
+			helicopters[i].speed += (helicopters[i].start_speed - level_speed);
 		}
 		else {
-			randomizeColors(i);
+			int previous_scale_factor = helicopters[i].scale_factor;
 			helicopters[i].scale_factor = randomizeScale();
-			helicopters[i].speed = helicopters[i].start_speed;
+			if (previous_scale_factor != helicopters[i].scale_factor)
+			{
+				reverseTheAxis(i);
+			}
+			else {
+				helicopters[i].speed = 0;
+			}
+			randomizeColors(i);
 		}
 		glutPostRedisplay();
 	}
@@ -374,9 +383,9 @@ void checkLevelUpdate() {
 		updateLevelSpeed();
 		cout << "LEVEL UP" << endl;
 		score += 10;
-		randomizePlaneLocation();
 		plane_move_y = 0;
 		plane_move_x = 0;
+		randomizePlaneLocation();
 	}
 }
 
@@ -395,32 +404,29 @@ bool intersectCheck() {
 	int px0, px1, py0, py1, hx0, hx1, hy0, hy1;
 
 	for (int i = 0; i < 4; i++) {
-		px0 = planeV.position.x + plane_move_x;
-		px1 = planeV.position.x + plane_move_x + planeV.width;
-		py0 = planeV.position.y + plane_move_y;
-		py1 = planeV.position.y + plane_move_y + planeV.height;
-		hx0 = helicopters[i].position.x + helicopters[i].speed;
-		hx1 = helicopters[i].position.x + helicopters[i].speed + helicopters[i].width;
-		hy0 = helicopters[i].position.y;
-		hy1 = helicopters[i].position.y + helicopters[i].height;
+		px0 = planeV.position.x + plane_move_x; px1 = planeV.position.x + plane_move_x + planeV.width;
+		py0 = planeV.position.y + plane_move_y; py1 = planeV.position.y + plane_move_y + planeV.height;
+		hx0 = helicopters[i].position.x + helicopters[i].speed; hx1 = helicopters[i].position.x + helicopters[i].speed + helicopters[i].width;
+		// notes page 3
+		if (helicopters[i].scale_factor == -1) {
+			int temp = hx0;
+			hx0 = hx1;
+			hx1 = temp;
+		}
+		hy0 = helicopters[i].position.y; hy1 = helicopters[i].position.y + helicopters[i].height;
 
-		is_x_have_collision = px1 >= hx0 && hx1 >= px0;
-		is_y_have_collision = py1 >= hy0 && hy1 >= py0;
+		is_x_have_collision = px1 >= hx0 && hx1 >= px0; is_y_have_collision = py1 >= hy0 && hy1 >= py0;
 		
 		//if both axis are true means there is a collision 
 		// intersected area info in case of intersection
 		if (is_x_have_collision && is_y_have_collision) {
-			// uçaðýn burnunun kordinatý y + 50 helinin tepesinin kordinati yani y + 50 den büyükse intersection üst kýsýmdan olmuþtur
+			cout << "collision " << endl;
 			int left, bottom, right, top;
-			left = max(px0, hx0);
-			right = min(px1, hx1);
-			top = min(py1, hy1);
-			bottom = max(py0, hy0);
-
+			left = max(px0, hx0); right = min(px1, hx1);
+			top = min(py1, hy1); bottom = max(py0, hy0);
 			return checkIntersectedAreas(left, bottom, fabs(right - left) == 0 ? 1 : fabs(right - left), fabs(top-bottom) == 0 ? 1 : fabs(top-bottom));
 		}
 	}
-
 	return false;
 }
  
@@ -461,4 +467,14 @@ void gameOver() {
 	renderBitmapString(60, 100, GLUT_BITMAP_9_BY_15, buffer);
 
 	glEnable(GL_BLEND);
+}
+
+/*
+	reverse axis in case of negative scaling
+*/
+void reverseTheAxis(int i ) {
+	helicopters[i].width *= -1; // because head is changing axis so points must too 
+	helicopters[i].position.x = TOTAL_WIDTH - helicopters[i].position.x; // primitive reflection
+	helicopters[i].start_speed = -(helicopters[i].start_speed);
+	helicopters[i].speed = 0;
 }
