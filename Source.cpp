@@ -1,4 +1,3 @@
-// reshape de collision patlýyor , maybe score geçmiþi ?
 #include<glew.h>
 #include<freeglut.h>
 #include<iostream>
@@ -110,6 +109,7 @@ void init2D() {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glViewport(0, 0, TOTAL_WIDTH, TOTAL_HEIGHT);
+
 	gluOrtho2D(0, TOTAL_WIDTH, 0, TOTAL_HEIGHT);
 
 	loadTexture("Images/heli1.png", heli_id[0]);
@@ -145,18 +145,13 @@ void display() {
 	reshape for window sizing
 */
 void reshape(int w, int h)
-{
-	if (h == 0) h = 1; // 0 division corner case
-	GLfloat aspect = (GLfloat)TOTAL_WIDTH / (GLfloat)TOTAL_HEIGHT;
-	
+{	
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	int width = h * aspect ;
-	int left = (w - width) / 2;
-	glViewport(left, 0, width, h);
 	gluOrtho2D(0, TOTAL_WIDTH, 0,TOTAL_HEIGHT);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
+	glutReshapeWindow(TOTAL_WIDTH, TOTAL_HEIGHT);
 }
 
 /*
@@ -451,9 +446,10 @@ bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
 	}
 	glReadPixels(xstart, ystart, partw, parth, GL_RGBA, GL_FLOAT, pixel);
 	
-	for (int i = 0; i < neededspace ; i++)
+	for (int i = 1; i < neededspace + 1; i++)
 	{
-		if (pixel[i] == 0)
+		//if(i%4==0) cout<< i<<".pixel: " << pixel[i] << endl;
+		if ( pixel[i] == 0)
 		{
 			return true;
 		}
