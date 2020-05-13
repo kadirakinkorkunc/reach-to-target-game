@@ -3,10 +3,9 @@
 #include<iostream>
 #include<SOIL2.h>
 #include <random>
-#include <functional>
-#include "Structers.h"
 #include<malloc.h>
 #include <Mmsystem.h> // for play sound
+#include "Structers.h"
 
 using namespace std;
 
@@ -28,23 +27,23 @@ void display();																// draw needed objects
 void drawHelis(Vehicle helicopters[]);										// draws helicopters
 void drawPlane();															// draws plane 
 void showScoreboard();														// draws scorboard to the screen
-void regular_flow(int what);												// regular program flow 
-void idlefunc();															// without any interference check intersections
+void renderBitmapString(float x, float y,void* font, const char* string);	// helper for rendering characters
 void keyboard_activity(int key, int x, int y);								// keyboard listener
 void keyboard_activity2(unsigned char key, int x, int y);					// keyboard listener
-void reshape(int w, int h);													// reshape function for windows resizing.
 void checkLevelUpdate();													// it checks plane location for leveling up
+void reshape(int w, int h);													// reshape function for windows resizing.
 void updateLevelSpeed();													// after every level update the choppers speed
 void randomizeColors(int i);												// generate new colors for textures
 int randomizeScale();														// choose random flying direction
-int randomizeStartSpeed();													// choose random start speed
 void randomizePlaneLocation();												// helper 
+int randomizeStartSpeed();													// choose random start speed
+void gameOver();															// it shows that game over		
+void reverseTheAxis(int i);													// reverses the axises for reverse flow
+void idlefunc();															// without any interference check intersections
+void updateGameStatus();													// this func resets level after crush
 bool intersectCheck();														// it checks collisions between plane and helicopters
 bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth);	// after reducing scan area this function scans pixel-perfect level
-void renderBitmapString(float x, float y,void* font, const char* string);	// helper for rendering characters
-void updateGameStatus();													// this func resets level after crush
-void gameOver();															// it shows that game over		
-void reverseTheAxis(int i);
+void regular_flow(int what);												// regular program flow 
 Vehicle helicopters[] = {
 	Vehicle({ 0, 525, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
 	Vehicle({ 0, 430, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
@@ -60,7 +59,7 @@ Vehicle planeV = Vehicle({ 215, 0, 0 }, { 1,1,1 }, 1 , 1);
 */
 int main(int argc, char* argv[]) {
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_DEPTH | GLUT_STENCIL); // LAST 3 ADDED LATER 
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA );
 	glutInitWindowSize(TOTAL_WIDTH, TOTAL_HEIGHT);
 	glutCreateWindow("REACH TO THE TARGET");
 	init2D();
@@ -85,18 +84,15 @@ void idlefunc() {
 */
 void updateGameStatus() {
 	
-	if (remainingLife == 0) {
-		// WAIT FOR ENTER
-	}
+	if (remainingLife == 0) {/*WAIT FOR ENTER*/}
 	else {
 		if (intersectCheck()) {
-			PlaySound("Sounds/plane_crash.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME );
+			PlaySound("Sounds/plane_crash.wav",
+				GetModuleHandle(NULL),
+				SND_ASYNC | SND_FILENAME );
 			remainingLife -= 1;
 			plane_move_y = 0;
-			randomizePlaneLocation();
-		}
-	}
-}
+			randomizePlaneLocation(); }}}
 
 
 /*
@@ -124,7 +120,7 @@ void init2D() {
 	draw objects and manage them
 */
 void display() {
-	glClear(GL_COLOR_BUFFER_BIT); // ekraný temizliyoruz
+	glClear(GL_COLOR_BUFFER_BIT); // clear screen
 
 	if (remainingLife > 0) {
 		showScoreboard();
@@ -161,18 +157,19 @@ void drawHelis(Vehicle helicopters[] ) {
 	
 	for (int i = 0; i < 4 ; i++)
 	{
-		glColor3f(helicopters[i].color.x, helicopters[i].color.y, helicopters[i].color.z);
 		glLoadIdentity();
+		glTranslated(helicopters[i].speed, 0, 0);
+		glColor3f(helicopters[i].color.x, helicopters[i].color.y, helicopters[i].color.z);
 		glBindTexture(GL_TEXTURE_2D, heli_id[i]);
 		glBegin(GL_QUADS);
 			glTexCoord2f(0, 0); 
-				glVertex2i(helicopters[i].position.x + helicopters[i].speed, helicopters[i].position.y);
+				glVertex2i(helicopters[i].position.x , helicopters[i].position.y);
 			glTexCoord2f(1, 0); 
-				glVertex2i(helicopters[i].position.x + helicopters[i].speed + helicopters[i].width , helicopters[i].position.y);
+				glVertex2i(helicopters[i].position.x  + helicopters[i].width , helicopters[i].position.y);
 			glTexCoord2f(1, 1); 
-				glVertex2i(helicopters[i].position.x + helicopters[i].speed + helicopters[i].width, helicopters[i].position.y + helicopters[i].height);
+				glVertex2i(helicopters[i].position.x  + helicopters[i].width, helicopters[i].position.y + helicopters[i].height);
 			glTexCoord2f(0, 1); 
-				glVertex2i(helicopters[i].position.x + helicopters[i].speed, helicopters[i].position.y + helicopters[i].height);
+				glVertex2i(helicopters[i].position.x, helicopters[i].position.y + helicopters[i].height);
 		glEnd();
 	}
 }
@@ -183,18 +180,18 @@ void drawHelis(Vehicle helicopters[] ) {
 */
 void drawPlane() {
 	glColor3f(1, 1, 1);
-	glLoadIdentity();	
 	glBindTexture(GL_TEXTURE_2D, plane);
-	
+	glLoadIdentity();
+	glTranslated(plane_move_x, plane_move_y, 0);
 	glBegin(GL_QUADS);
 		glTexCoord2f(0, 0);
-			glVertex2i(planeV.position.x + plane_move_x, planeV.position.y + plane_move_y);
+			glVertex2i(planeV.position.x, planeV.position.y );
 		glTexCoord2f(1, 0);
-			glVertex2i(planeV.position.x + plane_move_x + planeV.width , planeV.position.y + plane_move_y);
+			glVertex2i(planeV.position.x + planeV.width , planeV.position.y );
 		glTexCoord2f(1, 1);
-			glVertex2i(planeV.position.x + plane_move_x + planeV.width, planeV.position.y + planeV.height + plane_move_y);
+			glVertex2i(planeV.position.x + planeV.width, planeV.position.y + planeV.height );
 		glTexCoord2f(0, 1);
-			glVertex2i(planeV.position.x + plane_move_x, planeV.position.y + planeV.height + plane_move_y);
+			glVertex2i(planeV.position.x, planeV.position.y + planeV.height );
 	glEnd();
 }
 
@@ -223,10 +220,11 @@ void regular_flow(int what) {
 			}
 			randomizeColors(i);
 		}
-		glutPostRedisplay();
-	}
+		glutPostRedisplay();}
+
 	glutTimerFunc(20, regular_flow, 0);
 }
+
 
 /*
 	it returns a integer between selected numbers for random speed.
@@ -235,7 +233,6 @@ int randomizeStartSpeed() {
 	random_device rd;
 	default_random_engine generator( rd() );
 	uniform_int_distribution<int> distribution(1, 5);
-	
 	return distribution(generator);
 }
 
@@ -252,7 +249,6 @@ int randomizeScale() {
 	return list[index];
 
 }
-
 
 /*
 	this function gives randomized float numbers between 0 and 1 for r,g,b values after everyn turn
@@ -281,7 +277,6 @@ void randomizePlaneLocation() {
 
 	planeV.position.x = xCoord;
 	planeV.position.y = yCoord;
-	cout << "plane spawn pos x: " << planeV.position.x << " || plane spawn pos y: " << planeV.position.y << endl;
 }
 
 /*
@@ -354,16 +349,14 @@ void keyboard_activity(int key, int x, int y) {
 	if (key == GLUT_KEY_LEFT && (planeV.position.x + plane_move_x) > 0) {
 		 plane_move_x -= 10;
 	}
-	glutPostRedisplay();
-
-}
+	glutPostRedisplay(); }
 
 /*
 	this function does required actions after keyboard activities ( ENTER)
 */
 void keyboard_activity2(unsigned char key, int x, int y) {
 	if (key == 13 && remainingLife == 0) {
-		cout << "enter" << endl;
+		cout << "PRESSED ENTER" << endl;
 		remainingLife = 3;
 		plane_move_x = 0;
 		plane_move_y = 0;
@@ -378,17 +371,18 @@ void keyboard_activity2(unsigned char key, int x, int y) {
 this function checks if plane reached the target place
 */
 void checkLevelUpdate() {
-	if (plane_move_y + planeV.position.y > TOTAL_HEIGHT)
+	if (plane_move_y+planeV.position.y > TOTAL_HEIGHT)
 	{
 		updateLevelSpeed();
-		PlaySound("Sounds/level_up.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME);
+		PlaySound("Sounds/level_up.wav", 
+			GetModuleHandle(NULL),
+			SND_ASYNC | SND_FILENAME);
 		cout << "LEVEL UP" << endl;
 		score += 10;
 		plane_move_y = 0;
 		plane_move_x = 0;
 		randomizePlaneLocation();
-	}
-}
+	}}
 
 /*
 	after every level this function increases choppers speed
@@ -418,18 +412,13 @@ bool intersectCheck() {
 
 		is_x_have_collision = px1 >= hx0 && hx1 >= px0; is_y_have_collision = py1 >= hy0 && hy1 >= py0;
 		
-		//if both axis are true means there is a collision 
-		// intersected area info in case of intersection
+		//if both axis are true means there is a collision // intersected area info in case of intersection
 		if (is_x_have_collision && is_y_have_collision) {
-			cout << "collision " << endl;
 			int left, bottom, right, top;
 			left = max(px0, hx0); right = min(px1, hx1);
 			top = min(py1, hy1); bottom = max(py0, hy0);
 			return checkIntersectedAreas(left, bottom, fabs(right - left) == 0 ? 1 : fabs(right - left), fabs(top-bottom) == 0 ? 1 : fabs(top-bottom));
-		}
-	}
-	return false;
-}
+		} } return false; }
  
 /*
 	if there intersections this functions uses more spesific scan on pixel colors with alpha blending
@@ -448,11 +437,7 @@ bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
 	
 	for (int i = 1; i < neededspace + 1; i++)
 	{
-		//if(i%4==0) cout<< i<<".pixel: " << pixel[i] << endl;
-		if ( pixel[i] == 0)
-		{
-			return true;
-		}
+		if (pixel[i] == 0) return true;
 	}
 	return false;
 }
@@ -463,13 +448,10 @@ bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
 void gameOver() {
 	glLoadIdentity();
 	glDisable(GL_BLEND);
-
 	char buffer[100] = { '\0' };
-	sprintf_s(buffer, "GAME OVER SCORE:%d ENTER FOR PLAY AGAIN", score);
-	renderBitmapString(60, 320, GLUT_BITMAP_9_BY_15, buffer);
-
+	sprintf_s(buffer, "GAME OVER | SCORE:%d | 'ENTER' FOR PLAY AGAIN", score);
+	renderBitmapString(40, 320, GLUT_BITMAP_9_BY_15, buffer);
 	glEnable(GL_BLEND);
-
 	if (!isPlayed) PlaySound("Sounds/game_over.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME); isPlayed = true;
 }
 
@@ -482,3 +464,4 @@ void reverseTheAxis(int i ) {
 	helicopters[i].start_speed = -(helicopters[i].start_speed);
 	helicopters[i].speed = 0;
 }
+
