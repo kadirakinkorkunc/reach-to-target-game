@@ -13,11 +13,14 @@ const int TOTAL_WIDTH = 480;
 const int TOTAL_HEIGHT = 640;
 const int PLANE_ARE_HEIGHT = 190;
 const int PLANE_AREA_WIDTH = 430;
+int main_window;
 int remainingLife = 3;
 int score = 0;
 int plane_move_x = 0, plane_move_y = 0;
 int level_speed = 1;
-GLuint first_heli_id, second_heli_id, third_heli_id,fourth_heli_id, plane;
+enum GAME_STATE { ON_START , ON_PLAY, ON_STOP};
+GAME_STATE CURRENT_GAME_STATE = ON_START;
+GLuint first_heli_id, second_heli_id, third_heli_id,fourth_heli_id, plane, start_button,resume_button, exit_button;
 GLuint heli_id[] = { first_heli_id , second_heli_id, third_heli_id, fourth_heli_id };
 bool isPlayed = false; // for preventing sound loop
 
@@ -44,6 +47,12 @@ void updateGameStatus();													// this func resets level after crush
 bool intersectCheck();														// it checks collisions between plane and helicopters
 bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth);	// after reducing scan area this function scans pixel-perfect level
 void regular_flow(int what);												// regular program flow 
+void drawMenu();															// draws menu
+void drawStartButton();														// draws start button in menu
+void drawExitButton();														// draws exit button in menu
+void drawResumeButton();													// draws resume button in menu
+void mouseFunc(int bttn,int state,int x,int y);								// reflects against mouse actions
+
 Vehicle helicopters[] = {
 	Vehicle({ 0, 525, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
 	Vehicle({ 0, 430, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
@@ -61,7 +70,8 @@ int main(int argc, char* argv[]) {
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA );
 	glutInitWindowSize(TOTAL_WIDTH, TOTAL_HEIGHT);
-	glutCreateWindow("REACH TO THE TARGET");
+	int main_window = glutCreateWindow(
+		"160322064-kadir akýn-korkunç");
 	init2D();
 	glutReshapeFunc(reshape);
 	glutSpecialFunc(keyboard_activity);
@@ -69,14 +79,19 @@ int main(int argc, char* argv[]) {
 	glutIdleFunc(idlefunc);
 	glutTimerFunc(0,regular_flow,0);
 	glutDisplayFunc(display);
+	glutMouseFunc(mouseFunc);
 	glutMainLoop();
 }
+
 
 /*
 	check intersections
 */
 void idlefunc() {
+	if (CURRENT_GAME_STATE == ON_PLAY)
+	{
 		updateGameStatus();
+	}
 }
 
 /*
@@ -113,7 +128,9 @@ void init2D() {
 	loadTexture("Images/heli3.png", heli_id[2]);
 	loadTexture("Images/heli4.png", heli_id[3]);
 	loadTexture("Images/plane.png", plane);
-
+	loadTexture("Images/start-button.png", start_button);
+	loadTexture("Images/resume-button.png", resume_button);
+	loadTexture("Images/exit-button.png", exit_button);
 }
 
 /*
@@ -121,18 +138,22 @@ void init2D() {
 */
 void display() {
 	glClear(GL_COLOR_BUFFER_BIT); // clear screen
-
-	if (remainingLife > 0) {
-		showScoreboard();
-
-		// draw helicopters
-		drawHelis(helicopters);
-
-		// draw plane
-		drawPlane();
+	if (CURRENT_GAME_STATE == ON_START || CURRENT_GAME_STATE == ON_STOP)
+	{
+		drawMenu();
 	}
-	else { gameOver(); }
+	else if(CURRENT_GAME_STATE == ON_PLAY){
+		if (remainingLife > 0) {
+			showScoreboard();
 
+			// draw helicopters
+			drawHelis(helicopters);
+
+			// draw plane
+			drawPlane();
+		}
+		else { gameOver(); }
+	}
 	glFlush(); // refresh screen
 	glutSwapBuffers(); // change frame buffers
 }
@@ -157,6 +178,11 @@ void drawHelis(Vehicle helicopters[] ) {
 	
 	for (int i = 0; i < 4 ; i++)
 	{
+		glMatrixMode(GL_TEXTURE);
+		glLoadIdentity();
+		glRotatef(10.0, 0, 0, 1);
+
+		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
 		glTranslated(helicopters[i].speed, 0, 0);
 		glColor3f(helicopters[i].color.x, helicopters[i].color.y, helicopters[i].color.z);
@@ -179,6 +205,9 @@ void drawHelis(Vehicle helicopters[] ) {
 	draws plane
 */
 void drawPlane() {
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
 	glColor3f(1, 1, 1);
 	glBindTexture(GL_TEXTURE_2D, plane);
 	glLoadIdentity();
@@ -195,11 +224,107 @@ void drawPlane() {
 	glEnd();
 }
 
+
+/*
+reflects against mouse actions
+*/
+void mouseFunc(int button, int state, int x, int y) {
+	if (CURRENT_GAME_STATE == ON_STOP || CURRENT_GAME_STATE == ON_START)
+	{
+		if (button == GLUT_LEFT_BUTTON && x > 100 && x < 400 && y > 160 && y < 220)
+		{
+			CURRENT_GAME_STATE = ON_PLAY;
+		}
+		if (button == GLUT_LEFT_BUTTON && x > 100 && x < 400 && y > 360 && y < 420)
+		{
+			glutDestroyWindow(main_window);
+			exit(0);
+		}
+	}
+	glutPostRedisplay();
+
+}
+/*
+	draws start menu button
+*/
+void drawStartButton() {
+	
+	glColor3f(1, 1, 1);
+	glBindTexture(GL_TEXTURE_2D, start_button);
+	glLoadIdentity();
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 0);
+	glVertex2i(100,400);
+	glTexCoord2f(1, 0);
+	glVertex2i(400,400);
+	glTexCoord2f(1, 1);
+	glVertex2i(400,500);
+	glTexCoord2f(0, 1);
+	glVertex2i(100,500);
+	glEnd();
+}
+
+/*
+draws resume button for menu
+*/
+void drawResumeButton() {
+	
+	glColor3f(1, 1, 1);
+	glBindTexture(GL_TEXTURE_2D, resume_button);
+	glLoadIdentity();
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 0);
+	glVertex2i(100, 400);
+	glTexCoord2f(1, 0);
+	glVertex2i(400, 400);
+	glTexCoord2f(1, 1);
+	glVertex2i(400, 500);
+	glTexCoord2f(0, 1);
+	glVertex2i(100, 500);
+	glEnd();
+}
+
+/*
+draws exit button for menu
+*/
+void drawExitButton() {
+
+	glColor3f(1, 1, 1);
+	glBindTexture(GL_TEXTURE_2D, exit_button);
+	glLoadIdentity();
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 0);
+	glVertex2i(100, 200);
+	glTexCoord2f(1, 0);
+	glVertex2i(400, 200);
+	glTexCoord2f(1, 1);
+	glVertex2i(400, 300);
+	glTexCoord2f(0, 1);
+	glVertex2i(100, 300);
+	glEnd();
+}
+
+/*
+draws menu and its content with it
+*/
+void drawMenu() {
+	if (CURRENT_GAME_STATE == ON_START)
+	{
+		drawStartButton();
+	}
+	else if (CURRENT_GAME_STATE == ON_STOP) {
+		drawResumeButton();
+	}
+	drawExitButton();
+}
+
 /*
 	this function increases coordinates for helicopter moves and resets, scales, recolors objects after reaching beyond wall limits
 */
 void regular_flow(int what) {
-	for (int i = 0; i < 4; i++)
+	if (CURRENT_GAME_STATE == ON_PLAY)
+	{
+		for (int i = 0; i < 4; i++)
 	{
 		if (helicopters[i].scale_factor == 1 && helicopters[i].speed <= TOTAL_WIDTH)
 		{
@@ -221,6 +346,7 @@ void regular_flow(int what) {
 			randomizeColors(i);
 		}
 		glutPostRedisplay();}
+	}
 
 	glutTimerFunc(20, regular_flow, 0);
 }
@@ -356,7 +482,6 @@ void keyboard_activity(int key, int x, int y) {
 */
 void keyboard_activity2(unsigned char key, int x, int y) {
 	if (key == 13 && remainingLife == 0) {
-		cout << "PRESSED ENTER" << endl;
 		remainingLife = 3;
 		plane_move_x = 0;
 		plane_move_y = 0;
@@ -364,6 +489,10 @@ void keyboard_activity2(unsigned char key, int x, int y) {
 		isPlayed = false;
 		randomizePlaneLocation();
 		glutPostRedisplay();
+	}
+	if (key == 27) // in case of ESCAPE press
+	{
+		CURRENT_GAME_STATE = ON_STOP;
 	}
 }
 
@@ -377,7 +506,6 @@ void checkLevelUpdate() {
 		PlaySound("Sounds/level_up.wav", 
 			GetModuleHandle(NULL),
 			SND_ASYNC | SND_FILENAME);
-		cout << "LEVEL UP" << endl;
 		score += 10;
 		plane_move_y = 0;
 		plane_move_x = 0;
@@ -430,7 +558,6 @@ bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
 	pixel = (float*)malloc(neededspace * sizeof(float));
 	if (!pixel)
 	{
-		cout << "memory allocation failed" << endl;
 		exit(0);
 	}
 	glReadPixels(xstart, ystart, partw, parth, GL_RGBA, GL_FLOAT, pixel);
@@ -452,6 +579,7 @@ void gameOver() {
 	sprintf_s(buffer, "GAME OVER | SCORE:%d | 'ENTER' FOR PLAY AGAIN", score);
 	renderBitmapString(40, 320, GLUT_BITMAP_9_BY_15, buffer);
 	glEnable(GL_BLEND);
+	level_speed = 1;
 	if (!isPlayed) PlaySound("Sounds/game_over.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME); isPlayed = true;
 }
 
