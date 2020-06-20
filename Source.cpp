@@ -18,11 +18,15 @@ int remainingLife = 3;
 int score = 0;
 int plane_move_x = 0, plane_move_y = 0;
 int level_speed = 1;
+int current_level = 1;
 enum GAME_STATE { ON_START , ON_PLAY, ON_STOP};
 GAME_STATE CURRENT_GAME_STATE = ON_START;
 GLuint first_heli_id, second_heli_id, third_heli_id,fourth_heli_id, plane, start_button,resume_button, exit_button;
 GLuint heli_id[] = { first_heli_id , second_heli_id, third_heli_id, fourth_heli_id };
 bool isPlayed = false; // for preventing sound loop
+bool isUpKeyPressed = false, isDownKeyPressed = false, isRightKeyPressed = false, isLeftKeyPressed = false;
+bool isWelcomeScreenSoundPlayedRecently = false, isMainSoundPlaying = false;
+
 
 void init2D();																// load images and start configurations
 void loadTexture(const string& path, GLuint& object);						// create textures by using SOIL2 library
@@ -52,6 +56,13 @@ void drawStartButton();														// draws start button in menu
 void drawExitButton();														// draws exit button in menu
 void drawResumeButton();													// draws resume button in menu
 void mouseFunc(int bttn,int state,int x,int y);								// reflects against mouse actions
+void showHelper();															// helper for ESC
+void keyUp(int key, int x, int y);											// detects releasing a key
+void moveHelis();															// moves helis 
+void checkAndDoPlaneMove();													// moves plane via handlers
+void playWelcomeScreenSound();												// plays welcome screen music
+void playMainSound();														// plays main screen music
+void showLevelBar();														// shows current level at left bottom corner
 
 Vehicle helicopters[] = {
 	Vehicle({ 0, 525, 0 }, { 1, 1, 1 }, randomizeScale(), randomizeStartSpeed()),
@@ -76,6 +87,7 @@ int main(int argc, char* argv[]) {
 	glutReshapeFunc(reshape);
 	glutSpecialFunc(keyboard_activity);
 	glutKeyboardFunc(keyboard_activity2);
+	glutSpecialUpFunc(keyUp);
 	glutIdleFunc(idlefunc);
 	glutTimerFunc(0,regular_flow,0);
 	glutDisplayFunc(display);
@@ -102,12 +114,15 @@ void updateGameStatus() {
 	if (remainingLife == 0) {/*WAIT FOR ENTER*/}
 	else {
 		if (intersectCheck()) {
+			randomizePlaneLocation(); 
 			PlaySound("Sounds/plane_crash.wav",
 				GetModuleHandle(NULL),
-				SND_ASYNC | SND_FILENAME );
+				SND_SYNC | SND_FILENAME );
+			isMainSoundPlaying = false;
 			remainingLife -= 1;
 			plane_move_y = 0;
-			randomizePlaneLocation(); }}}
+			plane_move_x = 0;
+		}}}
 
 
 /*
@@ -133,6 +148,7 @@ void init2D() {
 	loadTexture("Images/exit-button.png", exit_button);
 }
 
+
 /*
 	draw objects and manage them
 */
@@ -144,6 +160,8 @@ void display() {
 	}
 	else if(CURRENT_GAME_STATE == ON_PLAY){
 		if (remainingLife > 0) {
+			playMainSound();
+			showLevelBar();
 			showScoreboard();
 
 			// draw helicopters
@@ -151,6 +169,9 @@ void display() {
 
 			// draw plane
 			drawPlane();
+
+			// show esc option in the right corner
+			showHelper();
 		}
 		else { gameOver(); }
 	}
@@ -169,6 +190,24 @@ void reshape(int w, int h)
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	glutReshapeWindow(TOTAL_WIDTH, TOTAL_HEIGHT);
+}
+
+
+void playMainSound() {
+	if (!isMainSoundPlaying)
+	{
+		PlaySound("Sounds/main_sound.wav", NULL, SND_LOOP | SND_ASYNC);
+		isMainSoundPlaying = true;
+	}
+}
+
+/*
+	plays welcome screen music
+*/
+void playWelcomeScreenSound() {
+	PlaySound("Sounds/start_sound.wav",
+		GetModuleHandle(NULL),
+		SND_ASYNC | SND_FILENAME);
 }
 
 /*
@@ -311,6 +350,11 @@ void drawMenu() {
 	if (CURRENT_GAME_STATE == ON_START)
 	{
 		drawStartButton();
+		if (!isWelcomeScreenSoundPlayedRecently)
+		{
+			playWelcomeScreenSound();
+			isWelcomeScreenSoundPlayedRecently = true;
+		}
 	}
 	else if (CURRENT_GAME_STATE == ON_STOP) {
 		drawResumeButton();
@@ -324,13 +368,24 @@ void drawMenu() {
 void regular_flow(int what) {
 	if (CURRENT_GAME_STATE == ON_PLAY)
 	{
-		for (int i = 0; i < 4; i++)
+		moveHelis();
+		checkAndDoPlaneMove();
+	}
+	glutTimerFunc(20, regular_flow, 0);
+}
+
+
+/*
+in regular flow this function moves helis.
+*/
+void moveHelis() {
+	for (int i = 0; i < 4; i++)
 	{
 		if (helicopters[i].scale_factor == 1 && helicopters[i].speed <= TOTAL_WIDTH)
 		{
 			helicopters[i].speed += helicopters[i].start_speed + level_speed;
 		}
-		else if (helicopters[i].scale_factor == -1 && helicopters[i].speed >= -TOTAL_WIDTH ) {
+		else if (helicopters[i].scale_factor == -1 && helicopters[i].speed >= -TOTAL_WIDTH) {
 			helicopters[i].speed += (helicopters[i].start_speed - level_speed);
 		}
 		else {
@@ -345,10 +400,30 @@ void regular_flow(int what) {
 			}
 			randomizeColors(i);
 		}
-		glutPostRedisplay();}
+		glutPostRedisplay();
 	}
 
-	glutTimerFunc(20, regular_flow, 0);
+
+}
+
+/*
+this function handles smooth moving via key press handlers
+*/
+void checkAndDoPlaneMove() {
+	if (isUpKeyPressed ) {
+		plane_move_y += 5;
+		checkLevelUpdate();
+	}
+	if (isDownKeyPressed && (plane_move_y + planeV.position.y) > 0) {
+		plane_move_y -= 5;
+	}
+	if (isRightKeyPressed && (planeV.position.x + planeV.width + plane_move_x) < TOTAL_WIDTH) {
+		plane_move_x += 5;
+	}
+	if (isLeftKeyPressed && (planeV.position.x + plane_move_x) > 0) {
+		plane_move_x -= 5;
+	}
+	
 }
 
 
@@ -400,7 +475,6 @@ void randomizePlaneLocation() {
 
 	int xCoord = width_distribution(width_generator);
 	int yCoord = height_distribution(height_generator);
-
 	planeV.position.x = xCoord;
 	planeV.position.y = yCoord;
 }
@@ -410,7 +484,6 @@ void randomizePlaneLocation() {
 */
 void renderBitmapString(float x, float y,void* font, const char* string) {
 	const char* c;
-	glColor3f(1, 1, 1);
 	glRasterPos2f(x,y);
 	for (c = string; *c != '\0'; c++) {
 		glutBitmapCharacter(font, *c);
@@ -422,6 +495,7 @@ void renderBitmapString(float x, float y,void* font, const char* string) {
 void showScoreboard() {
 	glLoadIdentity();
 	glDisable(GL_BLEND);
+	glColor3f(1, 0, 1);
 
 	char buffer[20] = { '\0' };
 	char buffer2[20] = { '\0' };
@@ -429,6 +503,37 @@ void showScoreboard() {
 	sprintf_s(buffer2, "HEARTS:%d", remainingLife); 
 	renderBitmapString(300,620,GLUT_BITMAP_9_BY_15, buffer);
 	renderBitmapString(400,620,GLUT_BITMAP_9_BY_15, buffer2);
+
+	glEnable(GL_BLEND);
+
+}
+/*
+	shows users current level at left bottom corner
+*/
+void showLevelBar() {
+	glLoadIdentity();
+	glDisable(GL_BLEND);
+	glColor3f(1, 0, 1);
+
+	char buffer[30] = { '\0' };
+	sprintf_s(buffer, "Level:%d", current_level);
+	renderBitmapString(10, 10, GLUT_BITMAP_9_BY_15, buffer);
+
+	glEnable(GL_BLEND);
+}
+
+/*
+shows esc option in the right corner of the screen
+*/
+void showHelper() {
+
+	glLoadIdentity();
+	glDisable(GL_BLEND);
+	glColor3f(1, 0, 1);
+
+	char buffer[200] = { '\0' };
+	sprintf_s(buffer, "press ESC to pause");
+	renderBitmapString(TOTAL_WIDTH - 100, 10, GLUT_BITMAP_HELVETICA_10, buffer);
 
 	glEnable(GL_BLEND);
 
@@ -463,24 +568,24 @@ void loadTexture(const string& path, GLuint& object) {
 */
 void keyboard_activity(int key, int x, int y) {
 	if (key == GLUT_KEY_UP) {
-		plane_move_y += 10;
-		checkLevelUpdate();
+		isUpKeyPressed = true;
 	}
-	if (key == GLUT_KEY_DOWN && (plane_move_y + planeV.position.y) > 0) {
-		plane_move_y -= 10;
+	if (key == GLUT_KEY_DOWN ) {
+		isDownKeyPressed = true;
 	}
-	if (key == GLUT_KEY_RIGHT && (planeV.position.x + planeV.width + plane_move_x) < TOTAL_WIDTH) {
-		plane_move_x += 10;
+	if (key == GLUT_KEY_RIGHT) {
+		isRightKeyPressed = true;
 	}
-	if (key == GLUT_KEY_LEFT && (planeV.position.x + plane_move_x) > 0) {
-		 plane_move_x -= 10;
+	if (key == GLUT_KEY_LEFT ) {
+		isLeftKeyPressed = true;
 	}
-	glutPostRedisplay(); }
+ }
 
 /*
 	this function does required actions after keyboard activities ( ENTER)
 */
 void keyboard_activity2(unsigned char key, int x, int y) {
+
 	if (key == 13 && remainingLife == 0) {
 		remainingLife = 3;
 		plane_move_x = 0;
@@ -492,9 +597,32 @@ void keyboard_activity2(unsigned char key, int x, int y) {
 	}
 	if (key == 27) // in case of ESCAPE press
 	{
-		CURRENT_GAME_STATE = ON_STOP;
+		if (CURRENT_GAME_STATE == ON_PLAY) 
+			CURRENT_GAME_STATE = ON_STOP;
+		else if(CURRENT_GAME_STATE == ON_STOP) 
+			CURRENT_GAME_STATE = ON_PLAY;
 	}
 }
+
+/*
+	this function checks and re assigns the variables for plane move
+*/
+void keyUp(int key, int x, int y) {
+	if (key == GLUT_KEY_UP) {
+		isUpKeyPressed = false;
+	}
+	if (key == GLUT_KEY_DOWN) {
+		isDownKeyPressed = false;
+		}
+	if (key == GLUT_KEY_RIGHT ) {
+		isRightKeyPressed = false;
+		}
+	if (key == GLUT_KEY_LEFT ) {
+		isLeftKeyPressed = false;
+		}
+	glutPostRedisplay();
+}
+
 
 /*
 this function checks if plane reached the target place
@@ -502,14 +630,19 @@ this function checks if plane reached the target place
 void checkLevelUpdate() {
 	if (plane_move_y+planeV.position.y > TOTAL_HEIGHT)
 	{
+		current_level++;
+		randomizePlaneLocation();
 		updateLevelSpeed();
 		PlaySound("Sounds/level_up.wav", 
 			GetModuleHandle(NULL),
-			SND_ASYNC | SND_FILENAME);
+			SND_SYNC | SND_FILENAME);
 		score += 10;
+		isMainSoundPlaying = false;
 		plane_move_y = 0;
 		plane_move_x = 0;
-		randomizePlaneLocation();
+
+
+		
 	}}
 
 /*
@@ -527,14 +660,18 @@ bool intersectCheck() {
 	int px0, px1, py0, py1, hx0, hx1, hy0, hy1;
 
 	for (int i = 0; i < 4; i++) {
-		px0 = planeV.position.x + plane_move_x; px1 = planeV.position.x + plane_move_x + planeV.width;
-		py0 = planeV.position.y + plane_move_y; py1 = planeV.position.y + plane_move_y + planeV.height;
+		px0 = planeV.position.x + plane_move_x + 10 ; px1 = planeV.position.x + plane_move_x + planeV.width - 10;
+		py0 = planeV.position.y + plane_move_y + 5; py1  = planeV.position.y + plane_move_y + planeV.height - 5;
 		hx0 = helicopters[i].position.x + helicopters[i].speed; hx1 = helicopters[i].position.x + helicopters[i].speed + helicopters[i].width;
 		// notes page 3
+		// revert heads and tails because of scaling
 		if (helicopters[i].scale_factor == -1) {
 			int temp = hx0;
 			hx0 = hx1;
 			hx1 = temp;
+			
+			
+
 		}
 		hy0 = helicopters[i].position.y; hy1 = helicopters[i].position.y + helicopters[i].height;
 
@@ -575,11 +712,14 @@ bool checkIntersectedAreas(int xstart, int ystart, int partw, int parth) {
 void gameOver() {
 	glLoadIdentity();
 	glDisable(GL_BLEND);
+	glColor3f(1, 0, 1);
+
 	char buffer[100] = { '\0' };
 	sprintf_s(buffer, "GAME OVER | SCORE:%d | 'ENTER' FOR PLAY AGAIN", score);
 	renderBitmapString(40, 320, GLUT_BITMAP_9_BY_15, buffer);
 	glEnable(GL_BLEND);
 	level_speed = 1;
+	current_level = 1;
 	if (!isPlayed) PlaySound("Sounds/game_over.wav", GetModuleHandle(NULL), SND_ASYNC | SND_FILENAME); isPlayed = true;
 }
 
